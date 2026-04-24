@@ -6,7 +6,7 @@ import android.widget.FrameLayout
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.*
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,25 +17,47 @@ import androidx.camera.core.*
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun CameraScreen() {
 
     val context = LocalContext.current
-    val executor = remember { Executors.newSingleThreadExecutor() }
-    var gestureText by remember { mutableStateOf("Detecting...") }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val executor = remember { Executors.newSingleThreadExecutor() }
+
+    var gestureText by remember { mutableStateOf("Detecting...") }
+    var gestureEnabled by remember { mutableStateOf(true) }
+    var overlayEnabled by remember { mutableStateOf(true) }
+
+    var currentResult by remember { mutableStateOf<GestureRecognizerResult?>(null) }
+    val controller = remember { GestureController() }
+
+    // 🔥 Bottom Sheet
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    val scope = rememberCoroutineScope()
+    var showSheet by remember { mutableStateOf(false) }
+
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        AndroidView(factory = {
-            val previewView = PreviewView(it)
+        // ================= CAMERA =================
+        AndroidView(factory = { ctx ->
+
+            val previewView = PreviewView(ctx)
             previewView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
 
-            val cameraProviderFuture = ProcessCameraProvider.getInstance(it)
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
             cameraProviderFuture.addListener({
+
                 val cameraProvider = cameraProviderFuture.get()
 
                 val preview = Preview.Builder().build().also {
@@ -47,13 +69,24 @@ fun CameraScreen() {
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
 
-                analyzer.setAnalyzer(executor, GestureAnalyzer(context) {
-                    gestureText = it
+                analyzer.setAnalyzer(executor, GestureAnalyzer(ctx) { gesture, score, result ->
+
+                    // 🚫 Ignore useless detections
+                    if (gesture == "None" || gesture == "No Gesture") {
+                        gestureText = "Detecting..."
+                        currentResult = result
+                        return@GestureAnalyzer
+                    }
+
+                    if (gestureEnabled) {
+                        gestureText = "$gesture (${String.format("%.2f", score)})"
+                        controller.handleGesture(gesture)
+                    }
+
+                    currentResult = result
                 })
 
                 val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-
-
 
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
@@ -63,16 +96,120 @@ fun CameraScreen() {
                     analyzer
                 )
 
-            }, ContextCompat.getMainExecutor(it))
+            }, ContextCompat.getMainExecutor(ctx))
 
             previewView
         })
 
-        Text(
-            text = "Gesture: $gestureText",
+        // ================= OVERLAY =================
+        AndroidView(
+            factory = { ctx -> OverlayView(ctx, null) },
+            modifier = Modifier.fillMaxSize(),
+            update = { overlay ->
+                if (overlayEnabled && currentResult != null) {
+                    overlay.setResults(
+                        currentResult!!,
+                        overlay.height,
+                        overlay.width
+                    )
+                } else {
+                    overlay.clear()
+                }
+            }
+        )
+
+        // ================= BOTTOM PANEL =================
+        Card(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(16.dp)
-        )
+                .fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            elevation = CardDefaults.cardElevation(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Column(modifier = Modifier.weight(1f)) {
+
+                    Text(
+                        text = "Gesture",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = gestureText,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        showSheet = true
+                        scope.launch { sheetState.show() }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings"
+                    )
+                }
+            }
+        }
+    }
+
+    // ================= SETTINGS BOTTOM SHEET =================
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState
+        ) {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Enable Gesture")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = gestureEnabled,
+                        onCheckedChange = { gestureEnabled = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show Overlay")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = overlayEnabled,
+                        onCheckedChange = { overlayEnabled = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
     }
 }

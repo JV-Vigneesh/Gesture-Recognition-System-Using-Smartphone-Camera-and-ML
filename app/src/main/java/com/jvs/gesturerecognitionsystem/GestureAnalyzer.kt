@@ -1,14 +1,15 @@
 package com.jvs.gesturerecognitionsystem
 
 import android.content.Context
+import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import com.jvs.gesturerecognitionsystem.GestureRecognizerHelper
 import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult
 
 class GestureAnalyzer(
     context: Context,
-    private val onGestureDetected: (String) -> Unit
+    private val onResult: (String, Float, GestureRecognizerResult?) -> Unit
 ) : ImageAnalysis.Analyzer,
     GestureRecognizerHelper.GestureRecognizerListener {
 
@@ -19,7 +20,6 @@ class GestureAnalyzer(
     )
 
     private val buffer = ArrayDeque<String>()
-
     private var lastTime = 0L
 
     private fun smoothGesture(newGesture: String): String {
@@ -34,10 +34,12 @@ class GestureAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val now = System.currentTimeMillis()
+
         if (now - lastTime < 120) {
             image.close()
             return
         }
+
         lastTime = now
         recognizerHelper.recognizeLiveStream(image)
     }
@@ -48,17 +50,28 @@ class GestureAnalyzer(
 
         if (result != null && result.gestures().isNotEmpty()) {
 
-            val rawGesture = result.gestures()[0][0].categoryName()
-            val gesture = smoothGesture(rawGesture)
-            val score = result.gestures()[0][0].score()
+            val gestureData = result.gestures()[0][0]
 
-            onGestureDetected("$gesture (${String.format("%.2f", score)})")
+            val rawGesture = gestureData.categoryName()
+            val score = gestureData.score()
+
+            // if (score < 0.5f) {
+              //  onResult("Detecting...", result)
+               // return
+           // }
+
+            val gesture = smoothGesture(rawGesture)
+            Log.d("GESTURE_DEBUG", "$rawGesture -> $score")
+
+            onResult(gesture, score, result)
+
+
         } else {
-            onGestureDetected("No Gesture")
+            onResult("No Gesture", 0f, null)
         }
     }
 
     override fun onError(error: String, errorCode: Int) {
-        onGestureDetected("Error")
+        onResult("Error", 0f, null)
     }
 }
