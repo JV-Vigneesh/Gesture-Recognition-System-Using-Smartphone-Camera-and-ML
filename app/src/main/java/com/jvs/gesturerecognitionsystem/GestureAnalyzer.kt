@@ -18,7 +18,27 @@ class GestureAnalyzer(
         gestureRecognizerListener = this
     )
 
+    private val buffer = ArrayDeque<String>()
+
+    private var lastTime = 0L
+
+    private fun smoothGesture(newGesture: String): String {
+        buffer.addLast(newGesture)
+        if (buffer.size > 5) buffer.removeFirst()
+
+        return buffer.groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key ?: newGesture
+    }
+
     override fun analyze(image: ImageProxy) {
+        val now = System.currentTimeMillis()
+        if (now - lastTime < 120) {
+            image.close()
+            return
+        }
+        lastTime = now
         recognizerHelper.recognizeLiveStream(image)
     }
 
@@ -28,7 +48,8 @@ class GestureAnalyzer(
 
         if (result != null && result.gestures().isNotEmpty()) {
 
-            val gesture = result.gestures()[0][0].categoryName()
+            val rawGesture = result.gestures()[0][0].categoryName()
+            val gesture = smoothGesture(rawGesture)
             val score = result.gestures()[0][0].score()
 
             onGestureDetected("$gesture (${String.format("%.2f", score)})")
