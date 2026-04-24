@@ -42,9 +42,12 @@ fun CameraScreen() {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
 
-                val analyzer = ImageAnalysis.Builder().build()
+                val analyzer = ImageAnalysis.Builder()
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
 
-                analyzer.setAnalyzer(executor, HandAnalyzer(context) {
+                analyzer.setAnalyzer(executor, GestureAnalyzer(context) {
                     gestureText = it
                 })
 
