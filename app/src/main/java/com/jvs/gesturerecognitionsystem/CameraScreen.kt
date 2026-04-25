@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +37,7 @@ fun CameraScreen() {
     var overlayEnabled by remember { mutableStateOf(true) }
 
     var currentResult by remember { mutableStateOf<GestureRecognizerResult?>(null) }
-    val controller = remember { GestureController() }
+    val controller = remember { GestureController(context) }
 
     // 🔥 Bottom Sheet
     val sheetState = rememberModalBottomSheetState(
@@ -44,6 +45,9 @@ fun CameraScreen() {
     )
     val scope = rememberCoroutineScope()
     var showSheet by remember { mutableStateOf(false) }
+
+    var imageWidth by remember { mutableStateOf(1) }
+    var imageHeight by remember { mutableStateOf(1) }
 
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -53,6 +57,8 @@ fun CameraScreen() {
 
             val previewView = PreviewView(ctx)
             previewView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+
+            previewView.scaleType = PreviewView.ScaleType.FILL_CENTER
 
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
@@ -69,21 +75,26 @@ fun CameraScreen() {
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
 
-                analyzer.setAnalyzer(executor, GestureAnalyzer(ctx) { gesture, score, result ->
-
-                    // 🚫 Ignore useless detections
-                    if (gesture == "None" || gesture == "No Gesture") {
-                        gestureText = "Detecting..."
-                        currentResult = result
-                        return@GestureAnalyzer
-                    }
-
-                    if (gestureEnabled) {
-                        gestureText = "$gesture (${String.format("%.2f", score)})"
-                        controller.handleGesture(gesture)
-                    }
+                analyzer.setAnalyzer(executor, GestureAnalyzer(ctx) { gesture, score, result, imgHeight, imgWidth, rotation ->
 
                     currentResult = result
+
+                    // 🔥 NO rotation handling here
+                    imageWidth = imgWidth
+                    imageHeight = imgHeight
+
+                    gestureText = if (gesture == "None" || gesture == "No Gesture") {
+                        "Detecting..."
+                    } else {
+                        "$gesture (${String.format(java.util.Locale.US, "%.2f", score)})"
+                    }
+
+                    if (gestureEnabled &&
+                        gesture != "None" &&
+                        gesture != "No Gesture"
+                    ) {
+                        controller.handleGesture(gesture)
+                    }
                 })
 
                 val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
@@ -106,11 +117,17 @@ fun CameraScreen() {
             factory = { ctx -> OverlayView(ctx, null) },
             modifier = Modifier.fillMaxSize(),
             update = { overlay ->
-                if (overlayEnabled && currentResult != null) {
+
+                if (overlayEnabled &&
+                    currentResult != null &&
+                    imageWidth > 0 &&
+                    imageHeight > 0
+                ) {
                     overlay.setResults(
                         currentResult!!,
-                        overlay.height,
-                        overlay.width
+                        imageHeight,
+                        imageWidth,
+                        RunningMode.LIVE_STREAM
                     )
                 } else {
                     overlay.clear()

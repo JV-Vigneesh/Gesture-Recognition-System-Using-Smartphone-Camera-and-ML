@@ -9,7 +9,7 @@ import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResu
 
 class GestureAnalyzer(
     context: Context,
-    private val onResult: (String, Float, GestureRecognizerResult?) -> Unit
+    private val onResult: (String, Float, GestureRecognizerResult?, Int, Int, Int) -> Unit
 ) : ImageAnalysis.Analyzer,
     GestureRecognizerHelper.GestureRecognizerListener {
 
@@ -21,6 +21,11 @@ class GestureAnalyzer(
 
     private val buffer = ArrayDeque<String>()
     private var lastTime = 0L
+
+    // 🔥 store last frame info
+    private var lastRotation = 0
+    private var lastWidth = 0
+    private var lastHeight = 0
 
     private fun smoothGesture(newGesture: String): String {
         buffer.addLast(newGesture)
@@ -41,6 +46,13 @@ class GestureAnalyzer(
         }
 
         lastTime = now
+
+        // 🔥 capture real frame info
+        lastRotation = image.imageInfo.rotationDegrees
+
+        lastWidth = image.width
+        lastHeight = image.height
+
         recognizerHelper.recognizeLiveStream(image)
     }
 
@@ -55,23 +67,25 @@ class GestureAnalyzer(
             val rawGesture = gestureData.categoryName()
             val score = gestureData.score()
 
-            // if (score < 0.5f) {
-              //  onResult("Detecting...", result)
-               // return
-           // }
-
             val gesture = smoothGesture(rawGesture)
+
             Log.d("GESTURE_DEBUG", "$rawGesture -> $score")
 
-            onResult(gesture, score, result)
-
+            onResult(
+                gesture,
+                score,
+                result,
+                lastHeight,
+                lastWidth,
+                0 // rotation no longer needed
+            )
 
         } else {
-            onResult("No Gesture", 0f, null)
+            onResult("No Gesture", 0f, null, 0, 0, lastRotation)
         }
     }
 
     override fun onError(error: String, errorCode: Int) {
-        onResult("Error", 0f, null)
+        onResult("Error", 0f, null, 0, 0, lastRotation)
     }
 }

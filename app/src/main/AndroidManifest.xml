@@ -5,6 +5,9 @@
 
     <!-- Camera permissions -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.FLASHLIGHT"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
 
     <!-- Camera features -->
     <uses-feature
@@ -32,7 +35,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.GestureRecognitionSystem">
 
             <intent-filter>
