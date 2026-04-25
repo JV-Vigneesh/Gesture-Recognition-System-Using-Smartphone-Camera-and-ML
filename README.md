@@ -49,3 +49,15 @@ You can customize the detection sensitivity in `GestureRecognizerHelper.kt`:
 3.  Build the project in Android Studio.
 4.  Run the app on a physical Android device.
 5.  Grant camera permissions when prompted.
+
+## Working Gestures
+| Gesture                  | Action                | What it does                |
+| ------------------------ | --------------------- | --------------------------- |
+| ✋ `Open_Palm`            | Volume Up             | Increases system volume     |
+| ✊ `Closed_Fist`          | Volume Down           | Decreases system volume     |
+| ✌️ `Victory`             | Flashlight Toggle     | Turns torch ON/OFF          |
+| 👍 `Thumb_Up`            | Vibrate               | Phone vibrates (feedback)   |
+| ☝️ `Pointing_Up`         | Open Camera           | Launches camera app         |
+| 👎 `Thumb_Down`          | Open Dialer           | Opens phone dial screen     |
+| 🤟 `ILoveYou`            | None                   | No action                  |
+| 🚫 `None` / `No Gesture` | Ignored               | No action                   |
